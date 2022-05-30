@@ -15,7 +15,7 @@ def view_all_users():
     c.execute('SELECT * FROM userstable')
     data = c.fetchall()
     return data'''
-
+import pandas as pd
 
 def addCompany(company, conn):
     conn.execute('INSERT INTO company(code,name) VALUES (?,?)',
@@ -30,7 +30,7 @@ def editCompany(companyId, companyDetails):
 def getCompanies(conn):
     c = conn.cursor()
     c.execute('SELECT * FROM company;')
-    return c.fetchall()
+    return pd.DataFrame(c.fetchall())
 
 
 def createTables(conn):

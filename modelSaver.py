@@ -1,13 +1,12 @@
 #save model
 import tensorflow as tf
-from keras.models import load_model
 import uuid
 import os
 
 
 def saveModel(model):
     # Save neural network structure
-    model_structure = model.to_json()
+    # model_structure = model.to_json()
     
     ## Comments - path should be in the UNIX form. 
     ## otherwise it wont work in the server environment
@@ -17,7 +16,7 @@ def saveModel(model):
     
     ## Comments - path should be in the UNIX form. 
     # or you can save the full model via:
-    model.save('C://Users/Rajini/Desktop/StockWebApp_fullkeras_model.h5')
+    model.save(savedFilename)
     
     #delete your model in memory
     del model

@@ -1,38 +1,39 @@
-import company_ddl as company_ddl
-from sklearn.preprocessing import MinMaxScaler
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import LSTM
-from keras.models import Sequential
 import sqlite3
 import streamlit as st
-import pandas as pd
-from keras import models
-from keras.models import load_model
-from PIL import Image
-import numpy as np
-import matplotlib.pyplot as plt
-
-# Security
+import uuid
+import os
 import hashlib
+
+import company_ddl
+import model_generator
+import modelSaver
+import training_job_ddl
 
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
-
 
 def check_hashes(password, hashed_text):
     if make_hashes(password) == hashed_text:
         return hashed_text
     return False
 
-
 # DB Management
 conn = sqlite3.connect('userdata.db')
 c = conn.cursor()
 company_ddl.createTables(conn)
+training_job_ddl.createTables(conn)
 
-# Creating the LSTM Model
+# create needed folders
+path = "trainingData"
+isExist = os.path.exists(path)
+if not isExist:
+    os.makedirs(path)
+    
+path = "models"
+isExist = os.path.exists(path)
+if not isExist:
+    os.makedirs(path)
 
 
 def initMLModel():
@@ -161,9 +162,7 @@ def view_all_users():
     return data
 
 def showCompanies():
-    companiesInDB = pd.DataFrame(company_ddl.getCompanies(conn))
-    print(companiesInDB)
-    print("got data")
+    companiesInDB = company_ddl.getCompanies(conn)
     if companiesInDB.empty:
         st.text("No data at the moment")
     else:
@@ -173,21 +172,54 @@ def showCompanies():
 
 def companiesSection():
     #company_ddl.createTables(conn)
-    newCode = st.text_input("Comapny code")
-    newName = st.text_input("Comapny name")
-    if st.button("Add company"):
+    newCode = st.text_input("Bank code")
+    newName = st.text_input("Bank name")
+    if st.button("Add bank"):
         constCompany = {}
         constCompany['code'] = newCode
         constCompany['name'] = newName
         company_ddl.addCompany(constCompany, conn)
 
+def trainSection():
+    st.subheader("Train a new model")
+    newTrainingJob = {}
+    
+    # select bank
+    # add tag
+    # upload file
+    # generate model
+    companiesInDB = company_ddl.getCompanies(conn)
+    banksStr = [' - '.join(val) for val in companiesInDB.astype(str).values.tolist()]
+    
+    selectedBank = st.selectbox("Select the bank", options=banksStr)
+    newTrainingJob['bank'] = selectedBank.split(' - ')[1]
+    
+    tag = st.text_input("Enter a tag")
+    newTrainingJob['tag'] = tag
+    
+    uploadedFile = st.file_uploader("Select your training dataset", type='csv')
+    if uploadedFile is not None:
+        savedFilename = os.path.join("trainingData", str(uuid.uuid4()) + '_' + uploadedFile.name)
+        with open(savedFilename,"wb") as f: 
+            f.write(uploadedFile.getbuffer())
+        newTrainingJob['trainingFile'] = savedFilename
+        if st.button("Train"):
+            with st.spinner("Please wait while training is completed..."):
+                generatedModel = model_generator.train(savedFilename)
+            modelSaver.saveModel(generatedModel)
+            newTrainingJob['modelFile'] = savedFilename
+            training_job_ddl.addTrainingJob(newTrainingJob, conn)
+            st.success("model trained successfully!")
+    else:
+        st.error("File should not be empty")
+        
 
 def main():
     """Simple Login App"""
 
     st.title("Stock Prediction Viewer")
 
-    menu = ["Home", "Login", "SignUp", "List Banks", "Add Bank", "Train", "Predictions"]
+    menu = ["Home", "Login", "SignUp", "All Banks", "Add Bank", "Train", "Predictions"]
     choice = st.sidebar.selectbox("Menu", menu)
 
     if choice == "Home":
@@ -228,11 +260,13 @@ def main():
             st.info("Go to Login Menu to login")
             # new_password = st.text_input("Password", value='', type='password')
 
-    elif choice == "List Banks":
-        st.subheader("Banks")
+    elif choice == "All Banks":
+        st.subheader("All Banks")
         showCompanies()
     elif choice == 'Add Bank':
         companiesSection()
+    elif "Train":
+        trainSection()
 
 
 if __name__ == '__main__':
