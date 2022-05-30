@@ -22,13 +22,13 @@ def saveModel(model):
     del model
     return savedFilename
 
-def resurrectModel():
+def resurrectModel(modelFileName):
     ## Comments - use the exact same file name
     #Know to load your model use:
-    my_new_model = tf.keras.models.load_model("C://Users/Rajini/Desktop/StockWebApp_fullkeras_model.h5")
+    my_new_model = tf.keras.models.load_model(modelFileName)
     
     #compile my_new_model:
     my_new_model.compile(loss='categorical_crossentropy',
                   optimizer='rmsprop',
                   metrics=['accuracy'])
-    
+    return my_new_model

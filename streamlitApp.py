@@ -3,11 +3,13 @@ import streamlit as st
 import uuid
 import os
 import hashlib
+import numpy as np
 
 import company_ddl
 import model_generator
 import modelSaver
 import training_job_ddl
+import model_tester
 
 
 def make_hashes(password):
@@ -35,6 +37,10 @@ isExist = os.path.exists(path)
 if not isExist:
     os.makedirs(path)
 
+path = "testingData"
+isExist = os.path.exists(path)
+if not isExist:
+    os.makedirs(path)
 
 def initMLModel():
     '''
@@ -184,10 +190,6 @@ def trainSection():
     st.subheader("Train a new model")
     newTrainingJob = {}
     
-    # select bank
-    # add tag
-    # upload file
-    # generate model
     companiesInDB = company_ddl.getCompanies(conn)
     banksStr = [' - '.join(val) for val in companiesInDB.astype(str).values.tolist()]
     
@@ -197,7 +199,7 @@ def trainSection():
     tag = st.text_input("Enter a tag")
     newTrainingJob['tag'] = tag
     
-    uploadedFile = st.file_uploader("Select your training dataset", type='csv')
+    uploadedFile = st.file_uploader("Select your training dataset", type='csv', key='trainingSetUploader')
     if uploadedFile is not None:
         savedFilename = os.path.join("trainingData", str(uuid.uuid4()) + '_' + uploadedFile.name)
         with open(savedFilename,"wb") as f: 
@@ -206,13 +208,46 @@ def trainSection():
         if st.button("Train"):
             with st.spinner("Please wait while training is completed..."):
                 generatedModel = model_generator.train(savedFilename)
-            modelSaver.saveModel(generatedModel)
-            newTrainingJob['modelFile'] = savedFilename
+            modelFile = modelSaver.saveModel(generatedModel)
+            newTrainingJob['modelFile'] = modelFile
             training_job_ddl.addTrainingJob(newTrainingJob, conn)
+            # st.file_uploader("Select your training dataset", type='csv').clear()
             st.success("model trained successfully!")
     else:
         st.error("File should not be empty")
+
+def predictions():
+    #pred_uploadedFile = None
+    #pred_loadedModel = None
+    allJobs = training_job_ddl.getTrainingJobs(conn)
+    
+    banks = allJobs.loc[:, "bank"].unique()
+    selectedBank = st.selectbox("Select the bank", options=banks)
+    if selectedBank is not None:
+        jobsOfBank = allJobs[allJobs['bank'] == selectedBank]
+        tags = jobsOfBank.loc[:, "tag"].unique()
+        selectedTag = st.selectbox("Select entered training tag", tags)
+        if selectedTag is not None:
+            selectedJob = allJobs[np.logical_and(allJobs['bank'] == selectedBank, allJobs['tag'] == selectedTag)]
+            if not selectedJob.empty:
+                params = selectedJob.iloc[0]
+                st.text("Training file is " + params['training_file'])
+                st.text("Saved model file is " + params['model_file'])
+                pred_uploadedFile = st.file_uploader("Select your testing dataset", type='csv', key='testingSetUploader')
+                if pred_uploadedFile is not None:
+                    savedFilename = os.path.join("testingData", str(uuid.uuid4()) + '_' + pred_uploadedFile.name)
+                    with open(savedFilename,"wb") as f: 
+                        f.write(pred_uploadedFile.getbuffer())
+                if st.button("Test"):
+                    pred_loadedModel = modelSaver.resurrectModel(params['model_file'])
+                    st.success('Model loaded')
+                    model_tester.testModel(pred_loadedModel, params['training_file'], savedFilename, params['bank'], st)
         
+    # select bank
+    # select tag
+    # load model
+    # upload test file
+    # generate predictions and graphs
 
 def main():
     """Simple Login App"""
@@ -265,8 +300,10 @@ def main():
         showCompanies()
     elif choice == 'Add Bank':
         companiesSection()
-    elif "Train":
+    elif choice == "Train":
         trainSection()
+    elif choice == "Predictions":
+        predictions()
 
 
 if __name__ == '__main__':

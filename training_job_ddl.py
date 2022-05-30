@@ -9,7 +9,9 @@ def addTrainingJob(company, conn):
 def getTrainingJobs(conn):
     c = conn.cursor()
     c.execute('SELECT * FROM training_job;')
-    return pd.DataFrame(c.fetchall())
+    df = pd.DataFrame(c.fetchall())
+    df.columns = ["id", "bank", "tag", "training_file", "model_file"]
+    return df
 
 
 def createTables(conn):
